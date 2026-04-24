@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoApply Agent Sidebar</title>
+  <link rel="stylesheet" href="sidebar.css">
+</head>
+<body>
+  <div id="sidebar-container">
+    <header>
+      <button class="close-btn" id="closeSidebar">✕</button>
+      <h2>Agent Panel</h2>
+    </header>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="analysis">Analysis</button>
+      <button class="tab-btn" data-tab="answer">Answer</button>
+      <button class="tab-btn" data-tab="history">History</button>
+    </div>
+
+    <div class="tab-content">
+      <!-- Analysis Tab -->
+      <div class="tab-pane active" id="analysis-tab">
+        <div class="spinner" id="analysisSpinner"></div>
+        <div id="analysisResult"></div>
+      </div>
+
+      <!-- Answer Tab -->
+      <div class="tab-pane" id="answer-tab">
+        <div class="answer-panel">
+          <h3>Generated Answer</h3>
+          <div id="answerContent" class="answer-content"></div>
+          <textarea id="answerEdit" placeholder="Edit answer..."></textarea>
+          <button class="btn-primary" id="applyAnswerBtn">Apply Answer</button>
+        </div>
+      </div>
+
+      <!-- History Tab -->
+      <div class="tab-pane" id="history-tab">
+        <div id="historyContent" class="history-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="sidebar.js" type="module"></script>
+</body>
+</html>

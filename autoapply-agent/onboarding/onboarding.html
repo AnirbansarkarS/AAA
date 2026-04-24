@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoApply Agent - Onboarding</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .onboarding-container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 600px;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .onboarding-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px 32px;
+      text-align: center;
+    }
+
+    .onboarding-header h1 {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+
+    .onboarding-header p {
+      font-size: 16px;
+      opacity: 0.9;
+    }
+
+    .progress-bar {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      position: relative;
+      margin-top: 20px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: white;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .onboarding-content {
+      padding: 40px 32px;
+      min-height: 400px;
+    }
+
+    .step {
+      display: none;
+    }
+
+    .step.active {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .step h2 {
+      font-size: 24px;
+      margin-bottom: 16px;
+      color: #333;
+    }
+
+    .step p {
+      color: #666;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      color: #333;
+      font-weight: 500;
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 14px;
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .checkbox-group {
+      display: grid;
+      gap: 10px;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .checkbox-item input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .checkbox-item label {
+      margin: 0;
+      cursor: pointer;
+    }
+
+    .mode-selector {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .mode-option {
+      border: 2px solid #ddd;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .mode-option:hover {
+      border-color: #667eea;
+      background: #f8f8ff;
+    }
+
+    .mode-option.selected {
+      border-color: #667eea;
+      background: #f0f0ff;
+    }
+
+    .mode-emoji {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+
+    .mode-name {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .mode-desc {
+      font-size: 12px;
+      color: #999;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 40px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+
+    .btn-secondary:hover {
+      background: #f0f0ff;
+    }
+
+    .success-message {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+      padding: 16px;
+      border-radius: 8px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .step-indicator {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 30px;
+    }
+
+    .step-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ddd;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .step-dot.active {
+      background: #667eea;
+      transform: scale(1.3);
+    }
+  </style>
+</head>
+<body>
+  <div class="onboarding-container">
+    <div class="onboarding-header">
+      <h1>Welcome to AutoApply Agent</h1>
+      <p>Let's get you set up in 4 easy steps</p>
+      <div class="progress-bar">
+        <div class="progress-fill"></div>
+      </div>
+    </div>
+
+    <div class="onboarding-content">
+      <div class="step-indicator" id="stepIndicator"></div>
+
+      <!-- Step 1: Basic Info -->
+      <div class="step active" data-step="1">
+        <h2>Basic Information</h2>
+        <p>Tell us a bit about yourself</p>
+
+        <div class="form-group">
+          <label for="name">Full Name *</label>
+          <input type="text" id="name" placeholder="e.g., John Smith" required>
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email Address *</label>
+          <input type="email" id="email" placeholder="e.g., john@example.com" required>
+        </div>
+
+        <div class="form-group">
+          <label for="phone">Phone Number</label>
+          <input type="tel" id="phone" placeholder="+1 (555) 000-0000">
+        </div>
+      </div>
+
+      <!-- Step 2: Professional Info -->
+      <div class="step" data-step="2">
+        <h2>Professional Background</h2>
+        <p>Help us understand your career</p>
+
+        <div class="form-group">
+          <label for="title">Current Title *</label>
+          <input type="text" id="title" placeholder="e.g., Software Engineer" required>
+        </div>
+
+        <div class="form-group">
+          <label for="company">Company</label>
+          <input type="text" id="company" placeholder="e.g., Acme Corp">
+        </div>
+
+        <div class="form-group">
+          <label for="yearsExp">Years of Experience *</label>
+          <input type="number" id="yearsExp" min="0" max="70" placeholder="e.g., 5" required>
+        </div>
+
+        <div class="form-group">
+          <label for="skills">Key Skills (comma-separated)</label>
+          <textarea id="skills" placeholder="e.g., Python, JavaScript, React, Product Management"></textarea>
+        </div>
+      </div>
+
+      <!-- Step 3: Goals & Preferences -->
+      <div class="step" data-step="3">
+        <h2>Goals & Preferences</h2>
+        <p>What are you looking for?</p>
+
+        <div class="form-group">
+          <label>Preferred Work Style</label>
+          <select id="workStyle">
+            <option value="remote">Remote</option>
+            <option value="hybrid" selected>Hybrid</option>
+            <option value="office">Office</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Target Industries (comma-separated)</label>
+          <input type="text" id="industries" placeholder="e.g., Tech, Finance, Healthcare">
+        </div>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="relocate">
+            Willing to relocate
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label>Your Main Goals</label>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <input type="checkbox" id="goal-achievement" value="achievement">
+              <label for="goal-achievement">Awards & Recognition (🏆)</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="goal-money" value="money">
+              <label for="goal-money">Financial Growth (💰)</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="goal-growth" value="growth">
+              <label for="goal-growth">Career Growth (🚀)</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="goal-networking" value="networking">
+              <label for="goal-networking">Networking (🤝)</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4: Preferences & Confirmation -->
+      <div class="step" data-step="4">
+        <h2>Agent Settings</h2>
+        <p>Choose your preferred interaction mode</p>
+
+        <div class="form-group">
+          <label>Select Your Primary Mode</label>
+          <div class="mode-selector">
+            <div class="mode-option" data-mode="trophy">
+              <div class="mode-emoji">🏆</div>
+              <div class="mode-name">Achievement</div>
+              <div class="mode-desc">Awards & recognition</div>
+            </div>
+            <div class="mode-option" data-mode="money">
+              <div class="mode-emoji">💰</div>
+              <div class="mode-name">Money</div>
+              <div class="mode-desc">Financial opportunities</div>
+            </div>
+            <div class="mode-option" data-mode="rocket">
+              <div class="mode-emoji">🚀</div>
+              <div class="mode-name">Growth</div>
+              <div class="mode-desc">Acceleration & scale</div>
+            </div>
+            <div class="mode-option" data-mode="handshake">
+              <div class="mode-emoji">🤝</div>
+              <div class="mode-name">Network</div>
+              <div class="mode-desc">Relationships</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="autoInject" checked>
+            Auto-inject sidebar on job sites
+          </label>
+        </div>
+
+        <div class="success-message" id="successMsg" style="display: none;">
+          ✅ Profile created successfully!
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button class="btn btn-secondary" id="prevBtn" style="display: none;">← Back</button>
+        <button class="btn btn-primary" id="nextBtn">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="onboarding.js" type="module"></script>
+</body>
+</html>

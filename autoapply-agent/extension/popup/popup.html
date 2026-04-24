@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoApply Agent</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>AutoApply Agent</h1>
+      <span class="status" id="status">Ready</span>
+    </header>
+
+    <div class="mode-selector">
+      <h3>Select Mode</h3>
+      <button class="mode-btn" data-mode="trophy" title="Trophy Mode">🏆</button>
+      <button class="mode-btn" data-mode="money" title="Money Mode">💰</button>
+      <button class="mode-btn" data-mode="rocket" title="Rocket Mode">🚀</button>
+      <button class="mode-btn" data-mode="handshake" title="Handshake Mode">🤝</button>
+    </div>
+
+    <div class="main-panel" id="mainPanel">
+      <p>Select a mode to get started</p>
+    </div>
+
+    <footer>
+      <button id="settingsBtn" class="icon-btn">⚙️ Settings</button>
+      <button id="helpBtn" class="icon-btn">❓ Help</button>
+    </footer>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>
