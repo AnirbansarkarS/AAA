@@ -5,32 +5,123 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AutoApply Agent</title>
   <link rel="stylesheet" href="popup.css">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>AutoApply Agent</h1>
-      <span class="status" id="status">Ready</span>
-    </header>
+  <div class="extension-wrapper">
+    <div class="main-container">
+      
+      <!-- Top Header Area -->
+      <div class="header-area">
+        <div class="logo-group">
+          <div class="pixel-text a-green">A</div>
+          <div class="robot-icon">??</div>
+          <div class="pixel-text aa-purple">AA</div>
+        </div>
+        <div class="badge">AUTO APPLY AGENT</div>
+      </div>
+      
+      <!-- Content Area (Two Columns) -->
+      <div class="columns-container">
+        <!-- Left Column -->
+        <div class="left-col">
+          
+          <!-- Auto Form Fill Setion -->
+          <div class="card card-green">
+            <h2 class="card-title">
+              <span class="icon">??</span> AUTO FORM FILL
+            </h2>
+            <div class="form-group row">
+              <label>Resume File:</label>
+              <input type="text" value="[jane_doe_resume.pdf]" readonly class="input-light">
+            </div>
+            <div class="form-group row">
+              <label>Full Name:</label>
+              <input type="text" value="[Jane Doe]" class="input-light">
+            </div>
+            <div class="form-group row">
+              <label>Email:</label>
+              <input type="email" value="[jane.doe@email.com]" class="input-light">
+            </div>
+            <div class="form-group">
+              <select class="input-light select-full">
+                <option>LinkedIn Profile</option>
+              </select>
+            </div>
+            <button class="btn btn-green">AUTO-FILL ON PAGE ??</button>
+          </div>
 
-    <div class="mode-selector">
-      <h3>Select Mode</h3>
-      <button class="mode-btn" data-mode="trophy" title="Trophy Mode">🏆</button>
-      <button class="mode-btn" data-mode="money" title="Money Mode">💰</button>
-      <button class="mode-btn" data-mode="rocket" title="Rocket Mode">🚀</button>
-      <button class="mode-btn" data-mode="handshake" title="Handshake Mode">🤝</button>
+          <!-- Data Mapping Section -->
+          <div class="card card-orange">
+            <h2 class="card-title">
+              <span class="icon">??</span> DATA MAPPING
+            </h2>
+            <div class="mapping-headers">
+              <span>Detected Fields</span>
+              <span>My Profile Source</span>
+            </div>
+            <div class="mapping-row">
+              <input type="text" value="Address" class="input-light field-input">
+              <span class="arrow">?</span>
+              <input type="text" value="Home Address 1" class="input-light source-input">
+            </div>
+            <button class="btn btn-orange">SAVE MAPPING</button>
+          </div>
+
+        </div>
+
+        <!-- Right Column -->
+        <div class="right-col">
+          <!-- Text Creation Agent Section -->
+          <div class="card card-purple">
+            <h2 class="card-title">
+              <span class="icon">????</span> TEXT CREATION AGENT
+            </h2>
+            
+            <div class="form-group row">
+              <label>Target Role:</label>
+              <input type="text" value="[Senior Frontend Dev]" class="input-light">
+            </div>
+            <div class="form-group">
+              <label>Generate for Company: [TechCorp]</label>
+              <textarea class="textarea-light" rows="2"></textarea>
+            </div>
+            
+            <div class="form-group">
+              <label>Output Type:</label>
+              <div class="checkbox-group">
+                <label><input type="checkbox"> [Cover Letter, Intro Email]</label>
+                <label><input type="checkbox"> [LinkedIn DM]</label>
+              </div>
+            </div>
+            
+            <button class="btn btn-purple">GENERATE MESSAGE ??</button>
+            
+            <div class="form-group preview-box">
+              <textarea class="textarea-dark" rows="3" readonly>Draft 1: [Preview text starts here...]</textarea>
+            </div>
+            
+            <button class="btn btn-orange">SAVE MAPPING</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer Status -->
+      <div class="status-footer">
+        <div class="user-info">
+          <div class="avatar">????</div>
+          <span class="user-name">[Jane Doe]</span>
+          <span class="settings-icon">??</span>
+        </div>
+        <div class="agent-status">
+          <span class="status-text">[Agent: READY - </span>
+          <span class="status-indicator"></span>
+          <span class="status-details">Connected to known job boards]</span>
+        </div>
+      </div>
+
     </div>
-
-    <div class="main-panel" id="mainPanel">
-      <p>Select a mode to get started</p>
-    </div>
-
-    <footer>
-      <button id="settingsBtn" class="icon-btn">⚙️ Settings</button>
-      <button id="helpBtn" class="icon-btn">❓ Help</button>
-    </footer>
   </div>
-
   <script src="popup.js" type="module"></script>
 </body>
 </html>
