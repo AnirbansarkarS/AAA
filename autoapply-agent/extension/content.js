@@ -1,86 +1,69 @@
-// Content Script - Runs in page context
-// Detects form fields and injects sidebar
+// content.js - Injected into pages
+console.log("AutoApply Agent: Content script loaded");
 
-const SIDEBAR_ID = 'autoapply-sidebar-root';
-
-// Detect form fields on the page
-function detectFormFields() {
-  const fields = [];
-  const inputs = document.querySelectorAll('input, textarea, select');
-  
-  inputs.forEach((field, index) => {
-    if (field.offsetParent !== null) { // Only visible fields
-      fields.push({
-        id: field.id || `field-${index}`,
-        name: field.name || field.placeholder || `field-${index}`,
-        type: field.type || field.tagName.toLowerCase(),
-        value: field.value,
-        placeholder: field.placeholder
-      });
-    }
-  });
-
-  return fields;
-}
-
-// Inject sidebar into DOM
-function injectSidebar() {
-  if (document.getElementById(SIDEBAR_ID)) {
-    return; // Already injected
+// 1. DOM Field Detector
+class FieldDetector {
+  constructor() {
+    this.targetKeywords = ["why", "describe", "tell us", "cover letter", "summary"];
   }
 
-  const sidebarRoot = document.createElement('div');
-  sidebarRoot.id = SIDEBAR_ID;
-  sidebarRoot.style.cssText = `
-    position: fixed;
-    right: 0;
-    top: 0;
-    width: 400px;
-    height: 100vh;
-    background: white;
-    border-left: 1px solid #ccc;
-    z-index: 999999;
-    box-shadow: -2px 0 5px rgba(0,0,0,0.1);
-    overflow-y: auto;
-  `;
+  // Look for inputs, textareas, and their associated labels
+  scanForFields() {
+    const textareas = document.querySelectorAll('textarea');
+    const inputs = document.querySelectorAll('input[type="text"]');
+    
+    const detectedFields = [];
 
-  document.body.appendChild(sidebarRoot);
-
-  // Load sidebar HTML
-  fetch(chrome.runtime.getURL('sidebar/sidebar.html'))
-    .then(r => r.text())
-    .then(html => {
-      sidebarRoot.innerHTML = html;
-      // Load sidebar script
-      const script = document.createElement('script');
-      script.src = chrome.runtime.getURL('sidebar/sidebar.js');
-      script.type = 'module';
-      document.body.appendChild(script);
+    [...textareas, ...inputs].forEach(field => {
+      let labelText = this.getLabelText(field).toLowerCase();
+      
+      // Check if it's an interesting field based on keywords
+      const isInteresting = this.targetKeywords.some(kw => labelText.includes(kw));
+      
+      if (isInteresting || field.tagName.toLowerCase() === 'textarea') {
+        detectedFields.push({
+          id: field.id || field.name,
+          type: field.tagName.toLowerCase(),
+          label: labelText,
+          element: field
+        });
+      }
     });
+
+    console.log("AutoApply Agent - Detected Fields:", detectedFields);
+    return detectedFields;
+  }
+
+  getLabelText(field) {
+    if (field.labels && field.labels.length > 0) {
+      return field.labels[0].innerText;
+    }
+    
+    if (field.id) {
+      let label = document.querySelector(`label[for="${field.id}"]`);
+      if (label) return label.innerText;
+    }
+    
+    return field.placeholder || field.name || 'Unknown Field';
+  }
+  
+  // 2. Page Text Extraction
+  extractPageContext() {
+    // Basic extraction of visible text for context reasoning
+    return document.body.innerText.substring(0, 5000); // Send up to 5000 chars to avoid huge payloads
+  }
 }
 
-// Listen for popup trigger
+const detector = new FieldDetector();
+
+// Listen for messages from popup or background
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'injectSidebar') {
-    injectSidebar();
-    sendResponse({ success: true });
+  if (request.action === 'SCAN_FIELDS') {
+    const fields = detector.scanForFields();
+    // Return serializable data (no DOM elements)
+    sendResponse(fields.map(f => ({ id: f.id, type: f.type, label: f.label })));
+  } else if (request.action === 'GET_PAGE_CONTEXT') {
+    sendResponse({ text: detector.extractPageContext() });
   }
-
-  if (request.action === 'getPageContext') {
-    const context = {
-      url: window.location.href,
-      title: document.title,
-      formFields: detectFormFields(),
-      bodyText: document.body.innerText.substring(0, 2000)
-    };
-    sendResponse(context);
-  }
-});
-
-// Auto-inject sidebar on page load if enabled in settings
-document.addEventListener('DOMContentLoaded', async () => {
-  const settings = await chrome.storage.local.get(['autoInjectSidebar']);
-  if (settings.autoInjectSidebar) {
-    injectSidebar();
-  }
+  return true; // Keep channel open for async response
 });

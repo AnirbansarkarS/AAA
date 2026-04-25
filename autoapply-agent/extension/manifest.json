@@ -1,31 +1,19 @@
 {
   "manifest_version": 3,
   "name": "AutoApply Agent",
-  "version": "1.0.0",
-  "description": "AI-powered agent for automated form filling and outreach",
-  "permissions": [
-    "storage",
-    "tabs",
-    "scripting",
-    "activeTab"
-  ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "version": "1.0",
+  "description": "Automated AI-assisted job application agent",
+  "permissions": ["activeTab", "storage", "scripting"],
+  "action": {
+    "default_popup": "popup/popup.html"
+  },
   "background": {
     "service_worker": "background.js"
-  },
-  "action": {
-    "default_popup": "popup/popup.html",
-    "default_title": "AutoApply Agent"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"]
     }
-  ],
-  "icons": {
-    "128": "icons/icon.svg"
-  }
+  ]
 }
