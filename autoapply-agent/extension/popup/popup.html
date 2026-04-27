@@ -28,54 +28,74 @@
           <div class="profile-chip-name" id="chip-name">Aryan S.</div>
           <div class="profile-chip-skills" id="chip-skills">ML · React · IoT · Blockchain</div>
         </div>
+        <button class="mic-btn" id="voice-mic-btn" title="Voice input skills">🎤</button>
         <a href="#" class="profile-chip-edit" id="chip-edit">Edit Profile</a>
       </div>
+
+      <!-- Voice Recording Status -->
+      <div id="voice-status" class="voice-status" style="display:none;">
+        <span id="voice-status-text">🎤 Recording...</span>
+        <button id="voice-stop-btn" class="btn-small btn-stop">⏹ Stop</button>
+      </div>
+
+      <!-- Voice Transcription Preview -->
+      <div id="voice-preview" class="voice-preview" style="display:none;">
+        <p style="font-size:11px; color:#aebce2; margin:0 0 5px 0;">Transcribed:</p>
+        <textarea id="voice-transcript" class="textarea-dark" rows="2" style="font-size:11px;"></textarea>
+        <div style="display:flex; gap:6px; margin-top:6px;">
+          <button class="btn-small btn-green" id="voice-save-btn">Save to Skills</button>
+          <button class="btn-small btn-orange" id="voice-cancel-btn">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Import Buttons -->
+      <div class="import-row">
+        <button class="btn-import" id="btn-import-linkedin">
+          <span>🔗</span> Import LinkedIn
+        </button>
+        <div class="github-import-group">
+          <input type="text" id="github-username" class="input-light" placeholder="GitHub username" style="width:100px; font-size:10px;">
+          <button class="btn-import btn-import-gh" id="btn-import-github">
+            <span>🐙</span> Import
+          </button>
+        </div>
+      </div>
+      <div id="import-status" class="import-status" style="display:none;"></div>
+
+      <!-- ATS Keyword Chips -->
+      <div id="ats-keyword-bar" class="ats-keyword-bar" style="display:none;">
+        <span class="ats-label">✦ ATS Keywords:</span>
+        <div id="ats-chips" class="ats-chips"></div>
+      </div>
+
       
       <!-- Content Area (Two Columns) -->
       <div class="columns-container">
         <!-- Left Column -->
         <div class="left-col">
           
-          <!-- Auto Form Fill Setion -->
+          <!-- My Documents Dropzone -->
           <div class="card card-green">
             <h2 class="card-title">
-              <span class="icon">📄</span> AUTO FORM FILL
+              <span class="icon">📁</span> MY DOCUMENTS
             </h2>
-            <div class="form-group row">
-              <label>Resume File:</label>
-              <input type="text" value="[jane_doe_resume.pdf]" readonly class="input-light">
+            <div class="form-group document-dropzone" id="doc-dropzone" style="border: 2px dashed #404040; border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; background: #232225; transition: border-color 0.3s ease;">
+              <div style="font-size: 24px; margin-bottom: 10px;">📄</div>
+              <p style="margin: 0 0 5px 0; color: #fff;">Drag & Drop Document here</p>
+              <p style="margin: 0; font-size: 12px; color: #a0a0a0;">Supports Resume (PDF), Aadhaar, PAN</p>
+              <button class="btn btn-green" style="margin-top: 15px; padding: 5px 15px;">Browse Files</button>
+              <input type="file" id="file-upload" accept=".pdf,.png,.jpg,.jpeg" style="display:none;">
             </div>
-            <div class="form-group row">
-              <label>Full Name:</label>
-              <input type="text" value="[Jane Doe]" class="input-light">
+            
+            <div id="doc-activity" class="activity-log-container" style="display: none; margin-top: 10px; max-height: 100px;">
+              <!-- Extraction Activity Log goes here -->
             </div>
-            <div class="form-group row">
-              <label>Email:</label>
-              <input type="email" value="[jane.doe@email.com]" class="input-light">
+            
+            <div id="doc-preview-zone" style="display: none; margin-top: 10px;">
+              <p style="font-size: 12px; color: #b1b1b3; margin-bottom: 5px;">Extracted Data:</p>
+              <pre id="doc-preview-content" style="background: #2b2a33; padding: 10px; border-radius: 4px; font-size: 11px; color: #a1f0a1; overflow-x: auto; max-width: 100%; white-space: pre-wrap; word-wrap: break-word;"></pre>
+              <button class="btn btn-green" id="btn-save-vault" style="margin-top: 10px; width: 100%;">SAVE TO VAULT 🔒</button>
             </div>
-            <div class="form-group">
-              <select class="input-light select-full">
-                <option>LinkedIn Profile</option>
-              </select>
-            </div>
-            <button class="btn btn-green">AUTO-FILL ON PAGE 🤖</button>
-          </div>
-
-          <!-- Data Mapping Section -->
-          <div class="card card-orange">
-            <h2 class="card-title">
-              <span class="icon">🔍</span> DATA MAPPING
-            </h2>
-            <div class="mapping-headers">
-              <span>Detected Fields</span>
-              <span>My Profile Source</span>
-            </div>
-            <div class="mapping-row">
-              <input type="text" value="Address" class="input-light field-input">
-              <span class="arrow">→</span>
-              <input type="text" value="Home Address 1" class="input-light source-input">
-            </div>
-            <button class="btn btn-orange">SAVE MAPPING</button>
           </div>
 
         </div>
