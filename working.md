@@ -10,6 +10,8 @@ Based on the console logs and output, the core functionality of the assistant is
 4. **Contextual AI Generation:** The `generateAnswers` prompt is working flawlessly! It is perfectly combining the job context and user profile.
 5. **Interactive UI & Answer Selection:** The raw JSON is successfully parsed, and the extension UI elegantly displays the AI responses as clickable cards grouped by question.
 6. **Form Auto-Filling:** Clicking an answer card seamlessly sends a message back to the active page, automatically and instantly injecting the text into the correct form input field while triggering necessary frontend events.
+7. **First-Run Onboarding Profile Capture:** On first boot, the user completes an onboarding flow that accurately queries their name, core skills, focus project, intended goals, and tone to populate `userProfile` in `chrome.storage`.
+8. **Live Interactive Agent UX & Memory Chip:** Clicking the `GENERATE MESSAGE` button now reveals a polished, real-time staggering "Agent Working" activity feed before displaying output. Additionally, the main pop-up UI displays a dynamically bound "Profile Context Chip" ensuring users physically see the background variables driving their agent's responses.
 
 ---
 
