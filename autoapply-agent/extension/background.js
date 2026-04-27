@@ -830,26 +830,53 @@ async function searchATSKeywords(jobTitle, company) {
   try {
     await loadAllKeys();
     if (!tavilyKey) return [];
-    const queries = [`${jobTitle} ATS resume keywords 2025`, `${company} ${jobTitle} hiring skills`];
-    const searchPromise = Promise.all(queries.map(async (query) => {
+    const normalizedCompany = (company || '').trim();
+    const queries = [
+      `${jobTitle} ATS resume keywords 2026`,
+      normalizedCompany ? `${normalizedCompany} ${jobTitle} hiring skills` : `${jobTitle} hiring skills 2026`
+    ];
+
+    const tavilySearch = async (query, timeoutMs = 4500) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const res = await fetch('https://api.tavily.com/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ api_key: tavilyKey, query, max_results: 3 })
+          body: JSON.stringify({
+            api_key: tavilyKey,
+            query,
+            max_results: 3
+          }),
+          signal: controller.signal
         });
-        if (res.ok) {
-          const data = await res.json();
-          return (data.results || []).map(r => r.content || '').join('\n');
-        }
-      } catch (e) { }
-      return '';
-    }));
-    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 5000));
-    const results = await Promise.race([searchPromise, timeoutPromise]);
-    const allSnippets = results.join('\n').trim();
+
+        if (!res.ok) return '';
+        const data = await res.json();
+        return (data.results || [])
+          .map(r => [r.title, r.content].filter(Boolean).join(': '))
+          .join('\n');
+      } catch (e) {
+        return '';
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
+    // Run both queries in parallel and tolerate one failing/timing out.
+    const settled = await Promise.allSettled(queries.map(q => tavilySearch(q)));
+    const snippets = settled
+      .filter(entry => entry.status === 'fulfilled')
+      .map(entry => entry.value || '')
+      .filter(Boolean);
+
+    const allSnippets = snippets.join('\n').trim();
     if (!allSnippets) return [];
-    const result = await askLLM(`Extract top 10 ATS keywords (JSON array) for "${jobTitle}" from: ${allSnippets.substring(0, 3000)}`);
+
+    const result = await askLLM(
+      `From the web snippets below, extract the top 10 ATS keywords for the "${jobTitle}" role as a JSON array of strings only.\n\n` +
+      allSnippets.substring(0, 3500)
+    );
     const match = result.match(/\[[\s\S]*?\]/);
     return match ? JSON.parse(match[0]) : [];
   } catch (e) {
