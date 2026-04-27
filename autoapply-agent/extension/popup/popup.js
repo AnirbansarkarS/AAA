@@ -94,6 +94,17 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           docActivity.innerHTML += "<div class='activity-step'><b>? Extraction Complete!</b></div>";
+          if (response.vaultUpdated) {
+            docActivity.innerHTML += "<div class='activity-step' style='color:#a1f0a1;'>? Auto-synced to Data Vault.</div>";
+            if (btnSaveVault) {
+              btnSaveVault.innerText = "SAVED TO VAULT ?";
+              btnSaveVault.classList.remove("btn-green");
+              btnSaveVault.classList.add("btn-orange");
+              btnSaveVault.disabled = true;
+            }
+          } else if (response.warning) {
+            docActivity.innerHTML += "<div class='activity-step' style='color:#ffd166;'>Warning: " + response.warning + "</div>";
+          }
           docActivity.scrollTop = docActivity.scrollHeight;
 
           if (response.data && typeof response.data === "object") {

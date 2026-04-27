@@ -102,6 +102,84 @@ async function loadAllKeys() {
   }
 }
 
+function normalizeArray(values) {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map(item => typeof item === 'string' ? item.trim() : item)
+    .filter(item => item !== null && item !== undefined && item !== '');
+}
+
+function mergeUniqueArray(existing, incoming) {
+  const base = normalizeArray(existing);
+  const next = normalizeArray(incoming);
+  const seen = new Set(base.map(item => typeof item === 'object' ? JSON.stringify(item) : String(item).toLowerCase()));
+  const merged = [...base];
+
+  for (const item of next) {
+    const key = typeof item === 'object' ? JSON.stringify(item) : String(item).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+  return merged;
+}
+
+function mergeVaultData(currentVault, updates) {
+  const merged = { ...(currentVault || {}) };
+  if (!updates || typeof updates !== 'object') return merged;
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (value === undefined || value === null) continue;
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) continue;
+      merged[key] = trimmed;
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      merged[key] = mergeUniqueArray(merged[key], value);
+      continue;
+    }
+
+    if (typeof value === 'object') {
+      const existingObject = (merged[key] && typeof merged[key] === 'object' && !Array.isArray(merged[key])) ? merged[key] : {};
+      merged[key] = { ...existingObject, ...value };
+      continue;
+    }
+
+    merged[key] = value;
+  }
+
+  return merged;
+}
+
+async function upsertVault(updates, sources = []) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(['user_vault'], (res) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+
+      const currentVault = res.user_vault || {};
+      const mergedVault = mergeVaultData(currentVault, updates);
+      const sourceList = Array.isArray(sources) ? sources : [sources];
+      mergedVault.sources = mergeUniqueArray(mergedVault.sources || [], sourceList);
+      mergedVault.updatedAt = new Date().toISOString();
+
+      chrome.storage.local.set({ user_vault: mergedVault }, () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        resolve(mergedVault);
+      });
+    });
+  });
+}
+
 // Listen for messages
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log("Background received Message:", request.action);
@@ -129,7 +207,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'EXTRACT_DOCUMENT') {
     const { base64Data, mimeType, docType } = request;
     extractFromDocument(base64Data, mimeType, docType)
-      .then(extracted => sendResponse({ success: true, data: extracted }))
+      .then(async extracted => {
+        const sourceTag = `document:${docType || 'unknown'}`;
+        try {
+          if (extracted && typeof extracted === 'object') {
+            await upsertVault(extracted, sourceTag);
+          } else {
+            await upsertVault({ extractedText: String(extracted || '') }, sourceTag);
+          }
+          sendResponse({ success: true, data: extracted, vaultUpdated: true });
+        } catch (vaultError) {
+          console.warn("[AutoApply] Document extracted but vault upsert failed:", vaultError);
+          sendResponse({
+            success: true,
+            data: extracted,
+            vaultUpdated: false,
+            warning: `Document extracted but vault update failed: ${vaultError.message}`
+          });
+        }
+      })
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
   }
@@ -145,33 +241,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === 'LINKEDIN_DATA_SCRAPED') {
     const data = request.data || {};
-    chrome.storage.local.get(['user_vault'], (res) => {
-      let vault = res.user_vault || {};
-      if (data.fullName) vault.fullName = vault.fullName || data.fullName;
-      if (data.linkedinHeadline) vault.linkedinHeadline = data.linkedinHeadline;
-      if (data.linkedinAbout) vault.linkedinAbout = data.linkedinAbout;
-      if (data.city) vault.city = vault.city || data.city;
-      if (data.linkedinURL) vault.linkedinURL = data.linkedinURL;
-      if (data.linkedinSkills && data.linkedinSkills.length > 0) {
-        const existingSkills = vault.skills || [];
-        vault.skills = [...new Set([...existingSkills, ...data.linkedinSkills])];
-        vault.linkedinSkills = data.linkedinSkills;
-      }
-      if (data.linkedinExperience) vault.linkedinExperience = data.linkedinExperience;
-      if (data.linkedinEducation) vault.linkedinEducation = data.linkedinEducation;
+    const linkedinUpdates = {
+      fullName: data.fullName || '',
+      linkedinHeadline: data.linkedinHeadline || '',
+      linkedinAbout: data.linkedinAbout || '',
+      city: data.city || '',
+      linkedinURL: data.linkedinURL || '',
+      linkedinSkills: data.linkedinSkills || [],
+      linkedinExperience: data.linkedinExperience || [],
+      linkedinEducation: data.linkedinEducation || [],
+      skills: data.linkedinSkills || []
+    };
 
-      if (!vault.sources) vault.sources = [];
-      if (!vault.sources.includes('linkedin')) vault.sources.push('linkedin');
-
-      chrome.storage.local.set({ user_vault: vault }, () => {
+    upsertVault(linkedinUpdates, 'linkedin')
+      .then((vault) => {
         if (linkedinImportTabId && sender?.tab?.id === linkedinImportTabId) {
           chrome.tabs.remove(linkedinImportTabId);
           linkedinImportTabId = null;
         }
         chrome.runtime.sendMessage({ action: 'LINKEDIN_IMPORT_DONE', data: vault });
+        sendResponse({ success: true, data: vault });
+      })
+      .catch((error) => {
+        sendResponse({ success: false, error: error.message });
       });
-    });
-    sendResponse({ success: true });
     return true;
   }
 
@@ -183,22 +276,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     }
     fetchGitHubData(username)
-      .then(ghData => {
-        chrome.storage.local.get(['user_vault'], (res) => {
-          let vault = res.user_vault || {};
-          vault.githubUsername = username;
-          vault.githubBio = ghData.bio || '';
-          vault.githubURL = ghData.profileUrl || vault.githubURL || '';
-          vault.githubProjects = ghData.projects || [];
-          const ghSkills = ghData.projects.map(p => p.language).filter(Boolean);
-          const existingSkills = vault.skills || [];
-          vault.skills = [...new Set([...existingSkills, ...ghSkills])];
-          if (!vault.sources) vault.sources = [];
-          if (!vault.sources.includes('github')) vault.sources.push('github');
-          chrome.storage.local.set({ user_vault: vault }, () => {
-            sendResponse({ success: true, data: ghData });
-          });
-        });
+      .then(async ghData => {
+        const ghSkills = (ghData.projects || []).map(p => p.language).filter(Boolean);
+        await upsertVault({
+          githubUsername: username,
+          githubBio: ghData.bio || '',
+          githubURL: ghData.profileUrl || '',
+          githubProjects: ghData.projects || [],
+          skills: ghSkills
+        }, 'github');
+        sendResponse({ success: true, data: ghData });
       })
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
@@ -216,17 +303,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'PARSE_SKILLS_FROM_TEXT') {
     const { text } = request;
     parseSkillsFromText(text)
-      .then(skills => {
-        chrome.storage.local.get(['user_vault'], (res) => {
-          let vault = res.user_vault || {};
-          const existingSkills = vault.skills || [];
-          vault.skills = [...new Set([...existingSkills, ...skills])];
-          if (!vault.sources) vault.sources = [];
-          if (!vault.sources.includes('voice-input')) vault.sources.push('voice-input');
-          chrome.storage.local.set({ user_vault: vault }, () => {
-            sendResponse({ success: true, skills: vault.skills });
-          });
-        });
+      .then(async skills => {
+        const vault = await upsertVault({ skills }, 'voice-input');
+        sendResponse({ success: true, skills: vault.skills || [] });
       })
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true;

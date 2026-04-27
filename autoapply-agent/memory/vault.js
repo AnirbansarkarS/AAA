@@ -86,12 +86,67 @@ export async function getVault() {
   });
 }
 
+function normalizeArray(values) {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map(item => (typeof item === 'string' ? item.trim() : item))
+    .filter(item => item !== null && item !== undefined && item !== '');
+}
+
+function mergeUniqueArray(existing, incoming) {
+  const base = normalizeArray(existing);
+  const next = normalizeArray(incoming);
+  const seen = new Set(base.map(item => (typeof item === 'object' ? JSON.stringify(item) : String(item).toLowerCase())));
+  const merged = [...base];
+
+  for (const item of next) {
+    const key = typeof item === 'object' ? JSON.stringify(item) : String(item).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+  return merged;
+}
+
+function mergeVaultData(currentVault, updates) {
+  const merged = { ...currentVault };
+
+  for (const [key, value] of Object.entries(updates || {})) {
+    if (value === undefined || value === null) continue;
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) continue;
+      merged[key] = trimmed;
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      merged[key] = mergeUniqueArray(merged[key], value);
+      continue;
+    }
+
+    if (typeof value === 'object') {
+      const existingObj = (merged[key] && typeof merged[key] === 'object' && !Array.isArray(merged[key])) ? merged[key] : {};
+      merged[key] = { ...existingObj, ...value };
+      continue;
+    }
+
+    merged[key] = value;
+  }
+
+  return merged;
+}
+
 /**
  * Save updates to the personal data vault
  */
-export async function saveToVault(updates) {
+export async function saveToVault(updates, sources = []) {
   const currentVault = await getVault();
-  const updatedVault = { ...currentVault, ...updates };
+  const updatedVault = mergeVaultData(currentVault, updates);
+  const sourceList = Array.isArray(sources) ? sources : [sources];
+  updatedVault.sources = mergeUniqueArray(updatedVault.sources || [], sourceList);
+  updatedVault.updatedAt = new Date().toISOString();
 
   return new Promise((resolve) => {
     chrome.storage.local.set({ [STORAGE_KEY]: updatedVault }, () => {
