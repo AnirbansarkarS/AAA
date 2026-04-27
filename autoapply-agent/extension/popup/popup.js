@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", () => {
+﻿document.addEventListener("DOMContentLoaded", () => {
   chrome.storage.local.get(["userProfile"], (result) => {
     if (!result.userProfile) {
       chrome.tabs.create({ url: chrome.runtime.getURL("onboarding/onboarding.html") });
@@ -22,8 +22,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (chipName) chipName.innerText = profile.name || "Unknown User";
     if (chipSkills) {
       let skillStr = typeof profile.skills === 'string' ? profile.skills :
-        (Array.isArray(profile.skills) ? profile.skills.join(" � ") : "");
-      chipSkills.innerText = skillStr.replace(/,/g, " � ") || "No skills listed";
+        (Array.isArray(profile.skills) ? profile.skills.join(" ï¿½ ") : "");
+      chipSkills.innerText = skillStr.replace(/,/g, " ï¿½ ") || "No skills listed";
     }
   });
 
@@ -173,57 +173,44 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btnLinkedIn) {
     btnLinkedIn.addEventListener("click", () => {
       btnLinkedIn.disabled = true;
-      btnLinkedIn.innerText = "⏳ Opening LinkedIn...";
+      btnLinkedIn.innerText = "â³ Opening LinkedIn...";
       showImportStatus("Opening your LinkedIn profile page...", false);
 
       chrome.runtime.sendMessage({ action: 'IMPORT_LINKEDIN' }, (res) => {
         if (chrome.runtime.lastError || !res?.success) {
-          showImportStatus("❌ Failed to open LinkedIn: " + (chrome.runtime.lastError?.message || res?.error || "Unknown"), true);
+          showImportStatus("âŒ Failed to open LinkedIn: " + (chrome.runtime.lastError?.message || res?.error || "Unknown"), true);
           btnLinkedIn.disabled = false;
-          btnLinkedIn.innerHTML = "<span>🔗</span> Import LinkedIn";
+          btnLinkedIn.innerHTML = "<span>ðŸ”—</span> Import LinkedIn";
         }
       });
     });
   }
-
-  // Listen for LinkedIn import completion from background
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.action === 'LINKEDIN_IMPORT_DONE') {
-      showImportStatus("✅ LinkedIn imported successfully!", false);
-      if (btnLinkedIn) {
-        btnLinkedIn.innerHTML = "<span>✅</span> LinkedIn Imported";
-        btnLinkedIn.disabled = false;
-      }
-      refreshProfileChip();
-    }
-  });
-
   // === Feature 1: GitHub Import ===
   if (btnGitHub) {
     btnGitHub.addEventListener("click", () => {
       const usernameInput = document.getElementById("github-username");
       const username = usernameInput?.value?.trim();
       if (!username) {
-        showImportStatus("❌ Enter a GitHub username first", true);
+        showImportStatus("âŒ Enter a GitHub username first", true);
         return;
       }
 
       btnGitHub.disabled = true;
-      btnGitHub.innerHTML = "<span>⏳</span> Fetching...";
+      btnGitHub.innerHTML = "<span>â³</span> Fetching...";
       showImportStatus("Fetching GitHub data for @" + username + "...", false);
 
       chrome.runtime.sendMessage({ action: 'FETCH_GITHUB', username }, (res) => {
         btnGitHub.disabled = false;
         if (chrome.runtime.lastError || !res?.success) {
-          showImportStatus("❌ GitHub import failed: " + (chrome.runtime.lastError?.message || res?.error || "Unknown"), true);
-          btnGitHub.innerHTML = "<span>🐙</span> Import";
+          showImportStatus("âŒ GitHub import failed: " + (chrome.runtime.lastError?.message || res?.error || "Unknown"), true);
+          btnGitHub.innerHTML = "<span>ðŸ™</span> Import";
           return;
         }
 
         const ghData = res.data;
         const repoNames = (ghData.projects || []).slice(0, 3).map(p => p.name).join(", ");
-        showImportStatus(`✅ GitHub imported! ${ghData.publicRepos} repos. Top: ${repoNames}`, false);
-        btnGitHub.innerHTML = "<span>✅</span> Done";
+        showImportStatus(`âœ… GitHub imported! ${ghData.publicRepos} repos. Top: ${repoNames}`, false);
+        btnGitHub.innerHTML = "<span>âœ…</span> Done";
         refreshProfileChip();
       });
     });
@@ -239,120 +226,68 @@ document.addEventListener("DOMContentLoaded", () => {
   const voiceSaveBtn = document.getElementById("voice-save-btn");
   const voiceCancelBtn = document.getElementById("voice-cancel-btn");
 
-  let mediaRecorder = null;
-  let audioChunks = [];
-  let speechRecognition = null;
+  let isVoiceRecording = false;
+  let voiceAutoStopTimer = null;
+
+  function clearVoiceAutoStopTimer() {
+    if (voiceAutoStopTimer) {
+      clearTimeout(voiceAutoStopTimer);
+      voiceAutoStopTimer = null;
+    }
+  }
+
+  function stopVoiceRecording() {
+    if (!isVoiceRecording) return;
+    isVoiceRecording = false;
+    clearVoiceAutoStopTimer();
+    if (voiceMicBtn) voiceMicBtn.classList.remove("recording");
+    if (voiceStatus) voiceStatus.style.display = "flex";
+    if (voiceStatusText) voiceStatusText.innerText = "Transcribing...";
+
+    chrome.runtime.sendMessage({ action: 'STOP_VOICE_RECORDING' }, (res) => {
+      if (chrome.runtime.lastError || !res?.success) {
+        if (voiceStatus) voiceStatus.style.display = "none";
+        showImportStatus("Voice recording stop failed: " + (chrome.runtime.lastError?.message || res?.error || "Unknown"), true);
+      }
+    });
+  }
 
   if (voiceMicBtn) {
     voiceMicBtn.addEventListener("click", async () => {
-      if (mediaRecorder && mediaRecorder.state === "recording") {
-        mediaRecorder.stop();
+      if (isVoiceRecording) {
+        stopVoiceRecording();
         return;
       }
 
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-        audioChunks = [];
+      if (voiceStatus) voiceStatus.style.display = "flex";
+      if (voiceStatusText) voiceStatusText.innerText = "Requesting microphone access...";
 
-        mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+      chrome.runtime.sendMessage({ action: 'START_VOICE_RECORDING' }, (res) => {
+        if (chrome.runtime.lastError || !res?.success) {
+          if (voiceStatus) voiceStatus.style.display = "none";
+          const errMsg = chrome.runtime.lastError?.message || res?.error || "Microphone permission denied";
+          showImportStatus("Voice recording failed: " + errMsg, true);
+          return;
+        }
 
-        mediaRecorder.onstop = async () => {
-          stream.getTracks().forEach(t => t.stop());
-          voiceMicBtn.classList.remove("recording");
-          voiceStatusText.innerText = "🔄 Transcribing...";
+        isVoiceRecording = true;
+        if (voiceMicBtn) voiceMicBtn.classList.add("recording");
+        if (voiceStatus) voiceStatus.style.display = "flex";
+        if (voiceStatusText) voiceStatusText.innerText = "Recording... (click Stop or mic to end)";
+        if (voicePreview) voicePreview.style.display = "none";
 
-          const blob = new Blob(audioChunks, { type: 'audio/webm' });
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64 = reader.result;
-            chrome.runtime.sendMessage({
-              action: 'TRANSCRIBE_AUDIO',
-              audioBase64: base64,
-              mimeType: 'audio/webm'
-            }, (res) => {
-              voiceStatus.style.display = "none";
-              if (chrome.runtime.lastError || !res?.success) {
-                // Fallback to browser STT if ElevenLabs fails
-                const errMsg = res?.error || chrome.runtime.lastError?.message || '';
-                if (errMsg === 'NO_ELEVENLABS_KEY' || errMsg.includes('ElevenLabs')) {
-                  startBrowserSTT();
-                  return;
-                }
-                showImportStatus("❌ Voice transcription failed: " + errMsg, true);
-                return;
-              }
-              showVoicePreview(res.text);
-            });
-          };
-          reader.readAsDataURL(blob);
-        };
-
-        mediaRecorder.start();
-        voiceMicBtn.classList.add("recording");
-        voiceStatus.style.display = "flex";
-        voiceStatusText.innerText = "🎤 Recording... (click Stop or mic to end)";
-        voicePreview.style.display = "none";
-
-        // Auto-stop after 30 seconds
-        setTimeout(() => {
-          if (mediaRecorder && mediaRecorder.state === "recording") {
-            mediaRecorder.stop();
-          }
+        clearVoiceAutoStopTimer();
+        voiceAutoStopTimer = setTimeout(() => {
+          if (isVoiceRecording) stopVoiceRecording();
         }, 30000);
-
-      } catch (err) {
-        console.warn("Mic access denied, falling back to browser STT:", err);
-        startBrowserSTT();
-      }
+      });
     });
   }
 
   if (voiceStopBtn) {
     voiceStopBtn.addEventListener("click", () => {
-      if (mediaRecorder && mediaRecorder.state === "recording") {
-        mediaRecorder.stop();
-      }
-      if (speechRecognition) {
-        speechRecognition.stop();
-      }
+      stopVoiceRecording();
     });
-  }
-
-  function startBrowserSTT() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      showImportStatus("❌ Speech recognition not available in this browser", true);
-      return;
-    }
-
-    speechRecognition = new SpeechRecognition();
-    speechRecognition.continuous = false;
-    speechRecognition.interimResults = false;
-    speechRecognition.lang = 'en-US';
-
-    voiceStatus.style.display = "flex";
-    voiceStatusText.innerText = "🎤 Listening (browser STT)...";
-    voiceMicBtn.classList.add("recording");
-
-    speechRecognition.onresult = (event) => {
-      const text = event.results[0][0].transcript;
-      voiceStatus.style.display = "none";
-      voiceMicBtn.classList.remove("recording");
-      showVoicePreview(text);
-    };
-
-    speechRecognition.onerror = (event) => {
-      voiceStatus.style.display = "none";
-      voiceMicBtn.classList.remove("recording");
-      showImportStatus("❌ Speech recognition error: " + event.error, true);
-    };
-
-    speechRecognition.onend = () => {
-      voiceMicBtn.classList.remove("recording");
-    };
-
-    speechRecognition.start();
   }
 
   function showVoicePreview(text) {
@@ -362,24 +297,52 @@ document.addEventListener("DOMContentLoaded", () => {
     voiceStatus.style.display = "none";
   }
 
+  // Listen for extension events from background
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.action === 'LINKEDIN_IMPORT_DONE') {
+      showImportStatus("LinkedIn imported successfully!", false);
+      if (btnLinkedIn) {
+        btnLinkedIn.innerHTML = "<span>✅</span> LinkedIn Imported";
+        btnLinkedIn.disabled = false;
+      }
+      refreshProfileChip();
+      return;
+    }
+
+    if (msg.action === 'TRANSCRIPTION_DONE') {
+      isVoiceRecording = false;
+      clearVoiceAutoStopTimer();
+      if (voiceMicBtn) voiceMicBtn.classList.remove("recording");
+      showVoicePreview(msg.text || "");
+      return;
+    }
+
+    if (msg.action === 'TRANSCRIPTION_ERROR') {
+      isVoiceRecording = false;
+      clearVoiceAutoStopTimer();
+      if (voiceStatus) voiceStatus.style.display = "none";
+      if (voiceMicBtn) voiceMicBtn.classList.remove("recording");
+      showImportStatus("Voice transcription failed: " + (msg.error || "Unknown error"), true);
+    }
+  });
   if (voiceSaveBtn) {
     voiceSaveBtn.addEventListener("click", () => {
       const text = voiceTranscript?.value?.trim();
       if (!text) return;
 
-      voiceSaveBtn.innerText = "⏳ Parsing...";
+      voiceSaveBtn.innerText = "â³ Parsing...";
       voiceSaveBtn.disabled = true;
 
       chrome.runtime.sendMessage({ action: 'PARSE_SKILLS_FROM_TEXT', text }, (res) => {
         voiceSaveBtn.disabled = false;
         if (res?.success) {
-          voiceSaveBtn.innerText = "✅ Saved!";
+          voiceSaveBtn.innerText = "âœ… Saved!";
           voicePreview.style.display = "none";
-          showImportStatus("✅ Skills updated: " + (res.skills || []).slice(-5).join(", "), false);
+          showImportStatus("âœ… Skills updated: " + (res.skills || []).slice(-5).join(", "), false);
           refreshProfileChip();
         } else {
           voiceSaveBtn.innerText = "Save to Skills";
-          showImportStatus("❌ Failed to parse skills", true);
+          showImportStatus("âŒ Failed to parse skills", true);
         }
       });
     });
@@ -407,7 +370,7 @@ document.addEventListener("DOMContentLoaded", () => {
           ? profile.skills.split(',').map(s => s.trim())
           : (Array.isArray(profile.skills) ? profile.skills : []);
         const merged = [...new Set([...skills, ...profileSkills])].filter(Boolean);
-        chipSkills.innerText = merged.slice(0, 8).join(" · ") || "No skills listed";
+        chipSkills.innerText = merged.slice(0, 8).join(" Â· ") || "No skills listed";
       }
     });
   }
@@ -447,10 +410,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const startSimulatedActivity = () => {
       const steps = [
-        "🔍 Reading page context...",
-        "👤 Loading profile & vault data...",
-        "📡 Researching job-specific ATS keywords...",
-        "🧠 Generating tailored responses..."
+        "ðŸ” Reading page context...",
+        "ðŸ‘¤ Loading profile & vault data...",
+        "ðŸ“¡ Researching job-specific ATS keywords...",
+        "ðŸ§  Generating tailored responses..."
       ];
       if (!activityLog) return;
 
@@ -607,7 +570,7 @@ document.addEventListener("DOMContentLoaded", () => {
                       const atsDiv = document.createElement("div");
                       atsDiv.className = "activity-step";
                       atsDiv.style.color = "#c4b5fd";
-                      atsDiv.innerText = "✦ Found " + atsKeywords.length + " ATS keywords for this role...";
+                      atsDiv.innerText = "âœ¦ Found " + atsKeywords.length + " ATS keywords for this role...";
                       activityLog.appendChild(atsDiv);
                       activityLog.scrollTop = activityLog.scrollHeight;
 
@@ -629,7 +592,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (activityLog) {
                       const completeDiv = document.createElement("div");
                       completeDiv.className = "activity-step";
-                      completeDiv.innerHTML = "<b>✅ Done! Preparing results...</b>";
+                      completeDiv.innerHTML = "<b>âœ… Done! Preparing results...</b>";
                       activityLog.appendChild(completeDiv);
 
                       setTimeout(() => {
@@ -712,3 +675,5 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 });
+
+
