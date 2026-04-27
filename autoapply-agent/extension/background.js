@@ -63,6 +63,7 @@ async function loadApiKeys() {
 
 // State for LinkedIn import flow
 let linkedinImportTabId = null;
+let creatingOffscreenDocument = null;
 
 // Load ElevenLabs, Tavily, OCR.space and Filestack keys from .env
 let keysLoaded = false;
@@ -102,6 +103,121 @@ async function loadAllKeys() {
   }
 }
 
+function normalizeArray(values) {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map(item => typeof item === 'string' ? item.trim() : item)
+    .filter(item => item !== null && item !== undefined && item !== '');
+}
+
+function mergeUniqueArray(existing, incoming) {
+  const base = normalizeArray(existing);
+  const next = normalizeArray(incoming);
+  const seen = new Set(base.map(item => typeof item === 'object' ? JSON.stringify(item) : String(item).toLowerCase()));
+  const merged = [...base];
+
+  for (const item of next) {
+    const key = typeof item === 'object' ? JSON.stringify(item) : String(item).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+  return merged;
+}
+
+function mergeVaultData(currentVault, updates) {
+  const merged = { ...(currentVault || {}) };
+  if (!updates || typeof updates !== 'object') return merged;
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (value === undefined || value === null) continue;
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) continue;
+      merged[key] = trimmed;
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      merged[key] = mergeUniqueArray(merged[key], value);
+      continue;
+    }
+
+    if (typeof value === 'object') {
+      const existingObject = (merged[key] && typeof merged[key] === 'object' && !Array.isArray(merged[key])) ? merged[key] : {};
+      merged[key] = { ...existingObject, ...value };
+      continue;
+    }
+
+    merged[key] = value;
+  }
+
+  return merged;
+}
+
+async function upsertVault(updates, sources = []) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(['user_vault'], (res) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+
+      const currentVault = res.user_vault || {};
+      const mergedVault = mergeVaultData(currentVault, updates);
+      const sourceList = Array.isArray(sources) ? sources : [sources];
+      mergedVault.sources = mergeUniqueArray(mergedVault.sources || [], sourceList);
+      mergedVault.updatedAt = new Date().toISOString();
+
+      chrome.storage.local.set({ user_vault: mergedVault }, () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        resolve(mergedVault);
+      });
+    });
+  });
+}
+
+async function ensureOffscreenDocument(path = 'offscreen.html') {
+  if (!chrome.offscreen?.createDocument) {
+    throw new Error("Offscreen API is not available in this Chrome version.");
+  }
+
+  const offscreenUrl = chrome.runtime.getURL(path);
+  const existingContexts = chrome.runtime.getContexts
+    ? await chrome.runtime.getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT'],
+      documentUrls: [offscreenUrl]
+    })
+    : [];
+
+  if (existingContexts.length > 0) return;
+
+  if (creatingOffscreenDocument) {
+    await creatingOffscreenDocument;
+    return;
+  }
+
+  creatingOffscreenDocument = chrome.offscreen.createDocument({
+    url: path,
+    reasons: ['USER_MEDIA'],
+    justification: 'Recording voice input for transcription.'
+  });
+
+  try {
+    await creatingOffscreenDocument;
+  } catch (error) {
+    if (!String(error?.message || '').includes('Only a single offscreen document')) {
+      throw error;
+    }
+  } finally {
+    creatingOffscreenDocument = null;
+  }
+}
+
 // Listen for messages
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log("Background received Message:", request.action);
@@ -129,7 +245,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'EXTRACT_DOCUMENT') {
     const { base64Data, mimeType, docType } = request;
     extractFromDocument(base64Data, mimeType, docType)
-      .then(extracted => sendResponse({ success: true, data: extracted }))
+      .then(async extracted => {
+        const sourceTag = `document:${docType || 'unknown'}`;
+        try {
+          if (extracted && typeof extracted === 'object') {
+            await upsertVault(extracted, sourceTag);
+          } else {
+            await upsertVault({ extractedText: String(extracted || '') }, sourceTag);
+          }
+          sendResponse({ success: true, data: extracted, vaultUpdated: true });
+        } catch (vaultError) {
+          console.warn("[AutoApply] Document extracted but vault upsert failed:", vaultError);
+          sendResponse({
+            success: true,
+            data: extracted,
+            vaultUpdated: false,
+            warning: `Document extracted but vault update failed: ${vaultError.message}`
+          });
+        }
+      })
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
   }
@@ -145,33 +279,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === 'LINKEDIN_DATA_SCRAPED') {
     const data = request.data || {};
-    chrome.storage.local.get(['user_vault'], (res) => {
-      let vault = res.user_vault || {};
-      if (data.fullName) vault.fullName = vault.fullName || data.fullName;
-      if (data.linkedinHeadline) vault.linkedinHeadline = data.linkedinHeadline;
-      if (data.linkedinAbout) vault.linkedinAbout = data.linkedinAbout;
-      if (data.city) vault.city = vault.city || data.city;
-      if (data.linkedinURL) vault.linkedinURL = data.linkedinURL;
-      if (data.linkedinSkills && data.linkedinSkills.length > 0) {
-        const existingSkills = vault.skills || [];
-        vault.skills = [...new Set([...existingSkills, ...data.linkedinSkills])];
-        vault.linkedinSkills = data.linkedinSkills;
-      }
-      if (data.linkedinExperience) vault.linkedinExperience = data.linkedinExperience;
-      if (data.linkedinEducation) vault.linkedinEducation = data.linkedinEducation;
+    const linkedinUpdates = {
+      fullName: data.fullName || '',
+      linkedinHeadline: data.linkedinHeadline || '',
+      linkedinAbout: data.linkedinAbout || '',
+      city: data.city || '',
+      linkedinURL: data.linkedinURL || '',
+      linkedinSkills: data.linkedinSkills || [],
+      linkedinExperience: data.linkedinExperience || [],
+      linkedinEducation: data.linkedinEducation || [],
+      skills: data.linkedinSkills || []
+    };
 
-      if (!vault.sources) vault.sources = [];
-      if (!vault.sources.includes('linkedin')) vault.sources.push('linkedin');
-
-      chrome.storage.local.set({ user_vault: vault }, () => {
+    upsertVault(linkedinUpdates, 'linkedin')
+      .then((vault) => {
         if (linkedinImportTabId && sender?.tab?.id === linkedinImportTabId) {
           chrome.tabs.remove(linkedinImportTabId);
           linkedinImportTabId = null;
         }
         chrome.runtime.sendMessage({ action: 'LINKEDIN_IMPORT_DONE', data: vault });
+        sendResponse({ success: true, data: vault });
+      })
+      .catch((error) => {
+        sendResponse({ success: false, error: error.message });
       });
-    });
-    sendResponse({ success: true });
     return true;
   }
 
@@ -183,24 +314,68 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     }
     fetchGitHubData(username)
-      .then(ghData => {
-        chrome.storage.local.get(['user_vault'], (res) => {
-          let vault = res.user_vault || {};
-          vault.githubUsername = username;
-          vault.githubBio = ghData.bio || '';
-          vault.githubURL = ghData.profileUrl || vault.githubURL || '';
-          vault.githubProjects = ghData.projects || [];
-          const ghSkills = ghData.projects.map(p => p.language).filter(Boolean);
-          const existingSkills = vault.skills || [];
-          vault.skills = [...new Set([...existingSkills, ...ghSkills])];
-          if (!vault.sources) vault.sources = [];
-          if (!vault.sources.includes('github')) vault.sources.push('github');
-          chrome.storage.local.set({ user_vault: vault }, () => {
-            sendResponse({ success: true, data: ghData });
-          });
+      .then(async ghData => {
+        const ghSkills = (ghData.projects || []).map(p => p.language).filter(Boolean);
+        await upsertVault({
+          githubUsername: username,
+          githubBio: ghData.bio || '',
+          githubURL: ghData.profileUrl || '',
+          githubProjects: ghData.projects || [],
+          skills: ghSkills
+        }, 'github');
+        sendResponse({ success: true, data: ghData });
+      })
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (request.action === 'START_VOICE_RECORDING') {
+    ensureOffscreenDocument()
+      .then(() => {
+        chrome.runtime.sendMessage({ target: 'offscreen', action: 'OFFSCREEN_START_RECORDING' }, (res) => {
+          if (chrome.runtime.lastError) {
+            sendResponse({ success: false, error: chrome.runtime.lastError.message });
+            return;
+          }
+          if (!res?.ok) {
+            sendResponse({ success: false, error: res?.error || 'Failed to start recording.' });
+            return;
+          }
+          sendResponse({ success: true });
         });
       })
       .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
+  if (request.action === 'STOP_VOICE_RECORDING') {
+    chrome.runtime.sendMessage({ target: 'offscreen', action: 'OFFSCREEN_STOP_RECORDING' }, (res) => {
+      if (chrome.runtime.lastError) {
+        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        return;
+      }
+      sendResponse({ success: !!res?.ok, error: res?.error });
+    });
+    return true;
+  }
+
+  if (request.action === 'RECORDING_DONE') {
+    const { audioBase64, mimeType } = request;
+    transcribeAudio(audioBase64, mimeType || 'audio/webm')
+      .then(async text => {
+        chrome.runtime.sendMessage({ action: 'TRANSCRIPTION_DONE', text });
+        try {
+          if (chrome.offscreen?.closeDocument) await chrome.offscreen.closeDocument();
+        } catch (_) { }
+        sendResponse({ success: true });
+      })
+      .catch(async error => {
+        chrome.runtime.sendMessage({ action: 'TRANSCRIPTION_ERROR', error: error.message });
+        try {
+          if (chrome.offscreen?.closeDocument) await chrome.offscreen.closeDocument();
+        } catch (_) { }
+        sendResponse({ success: false, error: error.message });
+      });
     return true;
   }
 
@@ -216,17 +391,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'PARSE_SKILLS_FROM_TEXT') {
     const { text } = request;
     parseSkillsFromText(text)
-      .then(skills => {
-        chrome.storage.local.get(['user_vault'], (res) => {
-          let vault = res.user_vault || {};
-          const existingSkills = vault.skills || [];
-          vault.skills = [...new Set([...existingSkills, ...skills])];
-          if (!vault.sources) vault.sources = [];
-          if (!vault.sources.includes('voice-input')) vault.sources.push('voice-input');
-          chrome.storage.local.set({ user_vault: vault }, () => {
-            sendResponse({ success: true, skills: vault.skills });
-          });
-        });
+      .then(async skills => {
+        const vault = await upsertVault({ skills }, 'voice-input');
+        sendResponse({ success: true, skills: vault.skills || [] });
       })
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
@@ -791,28 +958,100 @@ async function fetchGitHubData(username) {
   };
 }
 
+async function transcribeAudioWithGemini(audioBase64, mimeType) {
+  await loadApiKeys();
+  if (activeGeminiKeys.length === 0) {
+    throw new Error("No Gemini API key configured for transcription fallback.");
+  }
+
+  const raw = audioBase64.includes(',') ? audioBase64.split(',')[1] : audioBase64;
+  let lastError = "Unknown Gemini transcription error";
+
+  for (const key of activeGeminiKeys) {
+    for (const modelName of GEMINI_MODELS) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${key}`;
+      const payload = {
+        contents: [{
+          parts: [
+            { text: "Transcribe this audio. Return only the spoken text without metadata." },
+            { inline_data: { mime_type: mimeType || 'audio/webm', data: raw } }
+          ]
+        }]
+      };
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          lastError = `Gemini STT Error: ${response.status} - ${errText}`;
+          continue;
+        }
+
+        const data = await response.json();
+        const text = (data?.candidates?.[0]?.content?.parts || [])
+          .map(part => part.text || '')
+          .join('\n')
+          .trim();
+        if (text) return text;
+        lastError = "Gemini STT returned empty text.";
+      } catch (e) {
+        lastError = e.message || "Gemini STT request failed.";
+      }
+    }
+  }
+
+  throw new Error(lastError);
+}
+
 async function transcribeAudio(audioBase64, mimeType) {
   await loadAllKeys();
-  if (!elevenLabsKey) throw new Error('NO_ELEVENLABS_KEY');
   const raw = audioBase64.includes(',') ? audioBase64.split(',')[1] : audioBase64;
-  const byteString = atob(raw);
-  const ab = new ArrayBuffer(byteString.length);
-  const ia = new Uint8Array(ab);
-  for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-  const blob = new Blob([ab], { type: mimeType });
+  const errors = [];
 
-  const formData = new FormData();
-  formData.append('audio', blob, 'recording.webm');
-  formData.append('model_id', 'scribe_v1');
+  if (elevenLabsKey) {
+    try {
+      const byteString = atob(raw);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+      const blob = new Blob([ab], { type: mimeType || 'audio/webm' });
 
-  const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
-    method: 'POST',
-    headers: { 'xi-api-key': elevenLabsKey },
-    body: formData
-  });
-  if (!response.ok) throw new Error(`ElevenLabs Error: ${response.status}`);
-  const data = await response.json();
-  return data.text || '';
+      const formData = new FormData();
+      formData.append('audio', blob, 'recording.webm');
+      formData.append('model_id', 'scribe_v1');
+
+      const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+        method: 'POST',
+        headers: { 'xi-api-key': elevenLabsKey },
+        body: formData
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`ElevenLabs Error: ${response.status} - ${errText}`);
+      }
+      const data = await response.json();
+      const text = (data.text || '').trim();
+      if (text) return text;
+      throw new Error("ElevenLabs returned empty transcription.");
+    } catch (e) {
+      errors.push(e.message || "ElevenLabs transcription failed.");
+    }
+  } else {
+    errors.push("NO_ELEVENLABS_KEY");
+  }
+
+  try {
+    return await transcribeAudioWithGemini(audioBase64, mimeType || 'audio/webm');
+  } catch (e) {
+    errors.push(e.message || "Gemini transcription failed.");
+  }
+
+  throw new Error(`Voice transcription failed. ${errors.join(' | ')}`);
 }
 
 async function parseSkillsFromText(text) {
@@ -830,26 +1069,53 @@ async function searchATSKeywords(jobTitle, company) {
   try {
     await loadAllKeys();
     if (!tavilyKey) return [];
-    const queries = [`${jobTitle} ATS resume keywords 2025`, `${company} ${jobTitle} hiring skills`];
-    const searchPromise = Promise.all(queries.map(async (query) => {
+    const normalizedCompany = (company || '').trim();
+    const queries = [
+      `${jobTitle} ATS resume keywords 2026`,
+      normalizedCompany ? `${normalizedCompany} ${jobTitle} hiring skills` : `${jobTitle} hiring skills 2026`
+    ];
+
+    const tavilySearch = async (query, timeoutMs = 4500) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const res = await fetch('https://api.tavily.com/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ api_key: tavilyKey, query, max_results: 3 })
+          body: JSON.stringify({
+            api_key: tavilyKey,
+            query,
+            max_results: 3
+          }),
+          signal: controller.signal
         });
-        if (res.ok) {
-          const data = await res.json();
-          return (data.results || []).map(r => r.content || '').join('\n');
-        }
-      } catch (e) { }
-      return '';
-    }));
-    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 5000));
-    const results = await Promise.race([searchPromise, timeoutPromise]);
-    const allSnippets = results.join('\n').trim();
+
+        if (!res.ok) return '';
+        const data = await res.json();
+        return (data.results || [])
+          .map(r => [r.title, r.content].filter(Boolean).join(': '))
+          .join('\n');
+      } catch (e) {
+        return '';
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
+    // Run both queries in parallel and tolerate one failing/timing out.
+    const settled = await Promise.allSettled(queries.map(q => tavilySearch(q)));
+    const snippets = settled
+      .filter(entry => entry.status === 'fulfilled')
+      .map(entry => entry.value || '')
+      .filter(Boolean);
+
+    const allSnippets = snippets.join('\n').trim();
     if (!allSnippets) return [];
-    const result = await askLLM(`Extract top 10 ATS keywords (JSON array) for "${jobTitle}" from: ${allSnippets.substring(0, 3000)}`);
+
+    const result = await askLLM(
+      `From the web snippets below, extract the top 10 ATS keywords for the "${jobTitle}" role as a JSON array of strings only.\n\n` +
+      allSnippets.substring(0, 3500)
+    );
     const match = result.match(/\[[\s\S]*?\]/);
     return match ? JSON.parse(match[0]) : [];
   } catch (e) {
