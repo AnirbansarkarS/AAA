@@ -11,7 +11,7 @@
 [![Groq](https://img.shields.io/badge/Groq-LLaMA_3.3_70B-F55036?style=for-the-badge)](https://groq.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-**Built at [Hackathon Name] · April 2026**
+**Built at MLH HackDays · April 2026**
 
 [🚀 Install Extension](#installation) · [📺 Watch Demo](#demo) · [🏗 Architecture](#architecture) · [🤝 Contributing](#contributing)
 
