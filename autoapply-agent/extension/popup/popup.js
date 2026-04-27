@@ -1,86 +1,134 @@
-// Popup UI Logic
-
-const modes = {
-  trophy: { name: 'Achievement Mode', description: 'Optimize for awards and recognition' },
-  money: { name: 'Earnings Mode', description: 'Maximize financial opportunities' },
-  rocket: { name: 'Growth Mode', description: 'Accelerate progress and expansion' },
-  handshake: { name: 'Network Mode', description: 'Build relationships and partnerships' }
-};
-
-let selectedMode = null;
-
-// Mode button handlers
-document.querySelectorAll('.mode-btn').forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-    e.target.classList.add('active');
-    selectedMode = e.target.dataset.mode;
-    updateMainPanel(selectedMode);
-  });
-});
-
-function updateMainPanel(mode) {
-  const panel = document.getElementById('mainPanel');
-  const modeInfo = modes[mode];
-  
-  panel.innerHTML = `
-    <div class="mode-content">
-      <h2>${modeInfo.name}</h2>
-      <p>${modeInfo.description}</p>
-      <button id="analyzeBtn" class="primary-btn">Analyze Page</button>
-      <button id="injectSidebarBtn" class="secondary-btn">Open Sidebar</button>
-    </div>
-  `;
-
-  document.getElementById('analyzeBtn').addEventListener('click', analyzePage);
-  document.getElementById('injectSidebarBtn').addEventListener('click', injectSidebar);
-}
-
-async function analyzePage() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  
-  chrome.tabs.sendMessage(tab.id, { action: 'getPageContext' }, (context) => {
-    if (chrome.runtime.lastError) {
-      alert('Could not analyze page');
+document.addEventListener("DOMContentLoaded", () => {
+  chrome.storage.local.get(["userProfile"], (result) => {
+    if (!result.userProfile) {
+      chrome.tabs.create({ url: chrome.runtime.getURL("onboarding/onboarding.html") });
       return;
     }
 
-    const background = chrome.runtime.getBackgroundPage();
-    background.orchestrator.analyzePage(context, selectedMode).then(result => {
-      console.log('Analysis result:', result);
-      updateStatus('Analysis complete');
-    });
-  });
-}
+    const profile = result.userProfile;
+    const inputs = document.querySelectorAll('input[type="text"]');
+    if (inputs.length >= 4) {
+      inputs[1].value = profile.name || "";
+      inputs[3].value = profile.goal || "";
+    }
 
-async function injectSidebar() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  
-  chrome.tabs.sendMessage(tab.id, { action: 'injectSidebar' }, (response) => {
-    if (response && response.success) {
-      updateStatus('Sidebar injected');
-      window.close();
+    const userName = document.querySelector(".user-name");
+    if (userName) {
+      userName.innerText = `[${profile.name || "User"}]`;
     }
   });
-}
 
-function updateStatus(msg) {
-  document.getElementById('status').textContent = msg;
-  setTimeout(() => {
-    document.getElementById('status').textContent = 'Ready';
-  }, 3000);
-}
+  const genBtn = document.getElementById("generate-btn");
+  const draftPreview = document.getElementById("draft-preview");
 
-// Settings and Help
-document.getElementById('settingsBtn').addEventListener('click', () => {
-  chrome.runtime.openOptionsPage?.();
-});
+  if (!genBtn || !draftPreview) {
+    console.error("Popup wiring failed: missing generate button or draft preview element");
+    return;
+  }
 
-document.getElementById('helpBtn').addEventListener('click', () => {
-  alert('AutoApply Agent\n\n' +
-    '🏆 Trophy: Awards & recognition\n' +
-    '💰 Money: Financial opportunities\n' +
-    '🚀 Rocket: Growth & expansion\n' +
-    '🤝 Handshake: Relationships\n\n' +
-    'Select a mode and click "Analyze Page" to start.');
+  function isUnsupportedUrl(url) {
+    return (
+      !url ||
+      url.startsWith("chrome://") ||
+      url.startsWith("edge://") ||
+      url.startsWith("about:") ||
+      url.startsWith("chrome-extension://")
+    );
+  }
+
+  function ensureContentScript(tabId, callback) {
+    chrome.scripting.executeScript(
+      {
+        target: { tabId },
+        files: ["content.js"],
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          callback(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        callback(null);
+      }
+    );
+  }
+
+  genBtn.addEventListener("click", () => {
+    draftPreview.value = "Scanning page for fields and generating...";
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const activeTab = tabs && tabs[0];
+      if (!activeTab || !activeTab.id) {
+        draftPreview.value = "Error: No active tab found.";
+        return;
+      }
+
+      if (isUnsupportedUrl(activeTab.url)) {
+        draftPreview.value = "Error: This page type is not supported. Open a normal website tab and try again.";
+        return;
+      }
+
+      ensureContentScript(activeTab.id, (injectError) => {
+        if (injectError) {
+          const help = activeTab.url && activeTab.url.startsWith("file://")
+            ? " Enable 'Allow access to file URLs' in extension settings."
+            : "";
+          draftPreview.value = `Error: ${injectError.message}.${help}`;
+          return;
+        }
+
+        chrome.tabs.sendMessage(activeTab.id, { action: "SCAN_FIELDS" }, (fields) => {
+          if (chrome.runtime.lastError) {
+            draftPreview.value = `Error: ${chrome.runtime.lastError.message}`;
+            return;
+          }
+
+          if (!fields || fields.length === 0) {
+            draftPreview.value = "No matching target inputs/textareas found on this page.";
+            return;
+          }
+
+          chrome.tabs.sendMessage(activeTab.id, { action: "GET_PAGE_CONTEXT" }, (contextRes) => {
+            if (chrome.runtime.lastError) {
+              draftPreview.value = `Error: ${chrome.runtime.lastError.message}`;
+              return;
+            }
+
+            const pageText = contextRes ? contextRes.text : "";
+
+            chrome.storage.local.get(["userProfile"], (profileRes) => {
+              const profile = profileRes.userProfile || {};
+
+              chrome.runtime.sendMessage(
+                {
+                  action: "CRAFT_ON_PAGE_ANSWERS",
+                  data: {
+                    text: pageText,
+                    fields,
+                    profileData: profile,
+                  },
+                },
+                (response) => {
+                  if (chrome.runtime.lastError) {
+                    draftPreview.value = `Error: ${chrome.runtime.lastError.message}`;
+                    return;
+                  }
+
+                  if (response && response.success) {
+                    if (typeof response.answers === "string") {
+                      draftPreview.value = response.answers;
+                      return;
+                    }
+
+                    draftPreview.value = JSON.stringify(response.answers, null, 2);
+                  } else {
+                    draftPreview.value = `Error: ${response ? response.error : "Unknown"}`;
+                  }
+                }
+              );
+            });
+          });
+        });
+      });
+    });
+  });
 });
