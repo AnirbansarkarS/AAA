@@ -96,21 +96,23 @@ document.addEventListener("DOMContentLoaded", () => {
           docActivity.innerHTML += "<div class='activity-step'><b>? Extraction Complete!</b></div>";
           docActivity.scrollTop = docActivity.scrollHeight;
 
-          try {
-            latestExtractedData = JSON.parse(response.data);
+          if (response.data && typeof response.data === "object") {
+            latestExtractedData = response.data;
             if (docPreviewContent) docPreviewContent.innerText = JSON.stringify(latestExtractedData, null, 2);
-            setTimeout(() => {
-              docActivity.style.display = "none";
-              if (docPreviewZone) docPreviewZone.style.display = "block";
-            }, 1000);
-          } catch (err) {
-            if (docPreviewContent) docPreviewContent.innerText = response.data;
-            latestExtractedData = null;
-            setTimeout(() => {
-              docActivity.style.display = "none";
-              if (docPreviewZone) docPreviewZone.style.display = "block";
-            }, 1000);
+          } else {
+            try {
+              latestExtractedData = JSON.parse(response.data);
+              if (docPreviewContent) docPreviewContent.innerText = JSON.stringify(latestExtractedData, null, 2);
+            } catch (err) {
+              if (docPreviewContent) docPreviewContent.innerText = response.data;
+              latestExtractedData = null;
+            }
           }
+
+          setTimeout(() => {
+            docActivity.style.display = "none";
+            if (docPreviewZone) docPreviewZone.style.display = "block";
+          }, 1000);
         });
       };
       reader.readAsDataURL(file);

@@ -14,7 +14,10 @@
     "https://www.linkedin.com/*",
     "https://api.github.com/*",
     "https://api.elevenlabs.io/*",
-    "https://api.tavily.com/*"
+    "https://api.tavily.com/*",
+    "https://api.ocr.space/*",
+    "https://www.filestackapi.com/*",
+    "https://cdn.filestackcontent.com/*"
   ],
   "web_accessible_resources": [
     {
