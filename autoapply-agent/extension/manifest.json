@@ -4,6 +4,15 @@
   "version": "1.0",
   "description": "Automated AI-assisted job application agent",
   "permissions": ["activeTab", "storage", "scripting"],
+  "host_permissions": [
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [".env"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "action": {
     "default_popup": "popup/popup.html"
   },
