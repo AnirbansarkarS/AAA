@@ -302,3 +302,71 @@ body {
   background: #4b4b7a;
 }
 
+
+
+/* Profile Chip */
+.profile-chip-container {
+  display: flex;
+  align-items: center;
+  background-color: #2b2b2b;
+  border: 1px solid #5a5a5a;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 20px;
+  color: white;
+}
+.profile-chip-avatar {
+  font-size: 24px;
+  margin-right: 12px;
+  background: #3e3e3e;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.profile-chip-details {
+  flex-grow: 1;
+}
+.profile-chip-name {
+  font-weight: bold;
+  font-size: 14px;
+}
+.profile-chip-skills {
+  font-size: 11px;
+  color: #aebce2;
+  margin-top: 4px;
+}
+.profile-chip-edit {
+  font-size: 11px;
+  color: #8a4eed;
+  text-decoration: none;
+}
+.profile-chip-edit:hover {
+  text-decoration: underline;
+}
+
+/* Activity Log */
+.activity-log-container {
+  background-color: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 10px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 11px;
+  color: #00ff00;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.activity-step {
+  opacity: 0;
+  animation: fadeIn 0.3s forwards;
+}
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
+
