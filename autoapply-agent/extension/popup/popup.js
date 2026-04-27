@@ -20,6 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const genBtn = document.getElementById("generate-btn");
   const draftPreview = document.getElementById("draft-preview");
+  const answersContainer = document.getElementById("answers-container");
 
   if (!genBtn || !draftPreview) {
     console.error("Popup wiring failed: missing generate button or draft preview element");
@@ -115,12 +116,82 @@ document.addEventListener("DOMContentLoaded", () => {
 
                   if (response && response.success) {
                     if (typeof response.answers === "string") {
+                      if (draftPreview && answersContainer) {
+                        draftPreview.style.display = "block";
+                        answersContainer.style.display = "none";
+                      }
                       draftPreview.value = response.answers;
                       return;
                     }
 
-                    draftPreview.value = JSON.stringify(response.answers, null, 2);
+                    // Render interactive answer selection
+                    if (draftPreview && answersContainer) {
+                      draftPreview.style.display = "none";
+                      answersContainer.style.display = "flex";
+                      answersContainer.innerHTML = ""; // Clear old answers
+                      
+                      const answersObj = response.answers;
+                      for (const [label, variations] of Object.entries(answersObj)) {
+                        if (!Array.isArray(variations)) continue;
+                        
+                        // Find the matching field based on label (case-insensitive)
+                        const searchLabel = label.toLowerCase().trim();
+                        const matchedField = fields.find(f => {
+                          const fLabel = f.label.toLowerCase().trim();
+                          return fLabel === searchLabel || searchLabel.includes(fLabel) || fLabel.includes(searchLabel);
+                        });
+                        
+                        if (!matchedField) continue;
+
+                        const groupDiv = document.createElement("div");
+                        groupDiv.className = "answer-group";
+                        
+                        const titleEl = document.createElement("div");
+                        titleEl.className = "answer-question-title";
+                        titleEl.innerText = label;
+                        groupDiv.appendChild(titleEl);
+
+                        variations.forEach((text, idx) => {
+                          const cardDiv = document.createElement("div");
+                          cardDiv.className = "answer-card";
+                          cardDiv.innerText = text;
+                          
+                          cardDiv.addEventListener("click", () => {
+                            // Visually toggle selection state
+                            groupDiv.querySelectorAll(".answer-card").forEach(c => c.classList.remove("selected"));
+                            cardDiv.classList.add("selected");
+                            
+                            // Send fill request to content script
+                            chrome.tabs.sendMessage(activeTab.id, {
+                              action: "FILL_FIELD",
+                              fieldId: matchedField.id,
+                              text: text
+                            }, (fillRes) => {
+                               if (chrome.runtime.lastError) {
+                                  console.error("Fill failed", chrome.runtime.lastError);
+                               }
+                            });
+                          });
+                          
+                          groupDiv.appendChild(cardDiv);
+                        });
+                        
+                        answersContainer.appendChild(groupDiv);
+                      }
+
+                      if (answersContainer.children.length === 0) {
+                        draftPreview.style.display = "block";
+                        answersContainer.style.display = "none";
+                        draftPreview.value = "Results returned but the response format wasn't compatible.\n\n" + JSON.stringify(answersObj, null, 2);
+                      }
+                    } else {
+                      draftPreview.value = JSON.stringify(response.answers, null, 2);
+                    }
                   } else {
+                    if (draftPreview && answersContainer) {
+                       draftPreview.style.display = "block";
+                       answersContainer.style.display = "none";
+                    }
                     draftPreview.value = `Error: ${response ? response.error : "Unknown"}`;
                   }
                 }

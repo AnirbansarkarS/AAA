@@ -17,6 +17,10 @@ class FieldDetector {
     [...textareas, ...inputs].forEach(field => {
       let labelText = this.getLabelText(field).toLowerCase();
       
+      if (!field.id && !field.name) {
+        field.id = 'autoapply-field-' + Math.random().toString(36).substring(7);
+      }
+
       // Check if it's an interesting field based on keywords
       const isInteresting = this.targetKeywords.some(kw => labelText.includes(kw));
       
@@ -64,6 +68,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse(fields.map(f => ({ id: f.id, type: f.type, label: f.label })));
   } else if (request.action === 'GET_PAGE_CONTEXT') {
     sendResponse({ text: detector.extractPageContext() });
+  } else if (request.action === 'FILL_FIELD') {
+    const { fieldId, text } = request;
+    const el = document.getElementById(fieldId) || document.getElementsByName(fieldId)[0];
+    if (el) {
+      el.value = text;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      sendResponse({ success: true });
+    } else {
+      sendResponse({ success: false, error: 'Field not found' });
+    }
   }
   return true; // Keep channel open for async response
 });
