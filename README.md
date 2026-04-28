@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="screenshots/banner.png" alt="AutoApply Agent Banner" width="100%">
+<img src="autoapply-agent/extension/AAA_icon.jpeg" alt="AutoApply Agent Icon" width="120">
 
 # ⚡ AutoApply Agent
 
@@ -66,44 +66,15 @@ Every single answer changes based on your intent. This is agent behavior — not
 
 ---
 
-## 📸 Screenshots
+## 📸 Screenshots Gallery
 
 <div align="center">
 
-### Onboarding — Profile Capture
-<img src="screenshots/01-onboarding.png" alt="Onboarding Screen" width="380">
-
-*First-run onboarding captures your name, skills, top project, goal, and tone preference.*
-
----
-
-### Personal Intelligence Vault
-<img src="screenshots/02-vault.png" alt="Personal Vault" width="380">
-
-*All data from resume, LinkedIn, GitHub, Aadhaar, PAN, and voice merges into one vault.*
-
----
-
-### Live Agent Activity Feed
-<img src="screenshots/03-agent-working.png" alt="Agent Working" width="380">
-
-*Real-time activity log shows exactly what the agent is doing — no black boxes.*
-
----
-
-### Answer Cards + Form Fill
-<img src="screenshots/04-answer-cards.png" alt="Answer Cards" width="380">
-
-*3 tailored variations per question. Click to select. One button fills the entire form.*
-
----
-
-### Outreach Generator
-<img src="screenshots/05-outreach.png" alt="Outreach Generator" width="380">
-
-*Intent-aware cold emails and LinkedIn DMs generated from the same page context.*
+<img src="autoapply-agent/screenshots/Screenshot 2026-04-27 154022.png" alt="AutoApply Agent Screenshot 1" width="400">
+<img src="autoapply-agent/screenshots/Screenshot 2026-04-27 154130.png" alt="AutoApply Agent Screenshot 2" width="400">
 
 </div>
+
 
 ---
 
